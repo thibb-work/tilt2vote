@@ -1,7 +1,7 @@
 'use client';
 
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { getDatabase, type Database } from 'firebase/database';
+import { forceWebSockets, getDatabase, type Database } from 'firebase/database';
 import { getAuth, onAuthStateChanged, signInAnonymously, type Auth } from 'firebase/auth';
 
 /**
@@ -27,6 +27,10 @@ export function roomDb(): Database {
     throw new Error('Missing NEXT_PUBLIC_FIREBASE_DATABASE_URL. See .env.example.');
   }
   const app: FirebaseApp = getApps()[0] ?? initializeApp(config);
+  // The CSP permits database sockets, but not the script injection used by
+  // RTDB long polling. A remembered socket failure otherwise selects that
+  // blocked fallback and leaves returning/reconnecting phones stuck forever.
+  forceWebSockets();
   db = getDatabase(app);
   return db;
 }

@@ -201,7 +201,13 @@ export function useRoom({ role, roomId }: { role: Role; roomId: string | null })
         // Keyed by uid, not a random id: the rules only accept a write whose
         // node name matches the writer, so a phone cannot move anyone else.
         const mine = ref(db, `${phonesPath}/${identity}`);
-        void onDisconnect(mine).remove();
+        // The server consumes this registration after each disconnect. Rearm
+        // it on every connection so a returning phone also leaves cleanly.
+        cleanups.push(
+          onValue(ref(db, '.info/connected'), (snap) => {
+            if (snap.val() === true) void onDisconnect(mine).remove().catch(noteWrite);
+          }),
+        );
 
         let last = '';
         timers.push(

@@ -47,7 +47,7 @@ app look green:
 ```bash
 npx playwright install chromium
 # Read the passcode saved by scripts/reset-host-passcode.sh.
-node --env-file=.env.local test/e2e/production-60.mjs
+AUTH_CACHE=output/playwright/private-test-identities node --env-file=.env.local test/e2e/production-60.mjs
 ```
 
 This opens one authenticated host and 60 isolated mobile browser contexts on
@@ -81,3 +81,15 @@ missing round updates. The session listener now retries both authentication and
 subscription failures. The capacity harness records transient rejected sign-ups
 and requires every voter to finish authenticating and receive round updates;
 other HTTP failures still fail the run.
+
+
+`AUTH_CACHE` preserves this harness's own anonymous identities and host browser
+session after a failed run, with directory mode 700 and file mode 600. Retries
+reuse them to avoid repeatedly provisioning 60 new Firebase accounts. A
+successful run deletes its identities and cache files. The cache is covered by
+`/output/playwright/` in `.gitignore`; never share its contents. The capacity
+check still requires 60 independent authenticated voters connected together.
+
+The recovery regression also seeds Firebase's remembered WebSocket-failure flag.
+The app uses WebSockets explicitly because its CSP blocks the SDK's script-based
+long-poll transport. Disconnect presence cleanup is rearmed on every connection.

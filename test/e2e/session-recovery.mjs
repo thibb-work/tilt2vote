@@ -20,6 +20,7 @@ function observe(page) {
 }
 try {
   const hc = await browser.newContext();
+  await hc.addInitScript(() => localStorage.setItem('firebase:previous_websocket_failure', 'true'));
   host = await hc.newPage(); observe(host);
   await host.goto(`${BASE}/host`);
   await host.locator('input.field').fill(process.env.HOST_PASSCODE);
@@ -28,6 +29,8 @@ try {
   assert.equal(await host.getByRole('button', { name: 'Reopen round', exact: true }).count(), 0, 'Leave an already locked round unchanged');
   const png = PNG.sync.read(Buffer.from((await host.locator('img.qr').getAttribute('src')).split(',')[1], 'base64'));
   const link = jsQR(new Uint8ClampedArray(png.data), png.width, png.height).data;
+  await host.waitForFunction(() => document.querySelector('.status-line')?.textContent?.includes('Waiting for the first phone'));
+  console.log('PASS host connects despite a remembered WebSocket failure');
   const pc = await browser.newContext();
   await pc.addInitScript(() => {
     window.DeviceOrientationEvent = class extends Event { static async requestPermission() { return 'granted'; } };

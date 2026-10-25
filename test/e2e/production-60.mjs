@@ -16,6 +16,8 @@ const passcode = process.env.HOST_PASSCODE_FILE
   : process.env.HOST_PASSCODE;
 assert.ok(passcode, 'Set HOST_PASSCODE or HOST_PASSCODE_FILE');
 const output = process.env.TEST_OUTPUT ?? 'output/playwright/production-60';
+const authCache = process.env.AUTH_CACHE;
+if (authCache) { fs.mkdirSync(authCache, { recursive: true, mode: 0o700 }); fs.chmodSync(authCache, 0o700); }
 fs.mkdirSync(output, { recursive: true });
 const report = { base: BASE, users: USERS, started: new Date().toISOString(), checks: [], pageErrors: [], httpErrors: [] };
 const browsers = [];
@@ -38,14 +40,18 @@ async function until(label, fn, timeout = 30000) {
   return ms;
 }
 function observe(page) {
-  const network = { socketsOpened: 0, socketsClosed: 0, phoneWrites: 0, rejectedWrites: 0 };
+  const network = { socketsOpened: 0, socketsClosed: 0, phoneWrites: 0, rejectedWrites: 0, shutdownReasons: [] };
   networkStates.set(page, network);
   page.on('pageerror', (e) => report.pageErrors.push(e.message));
   page.on('websocket', (socket) => {
     network.socketsOpened++;
     socket.on('close', () => network.socketsClosed++);
     socket.on('framereceived', ({ payload }) => {
-      try { if (JSON.parse(String(payload)).d?.b?.s === 'permission_denied') network.rejectedWrites++; } catch {}
+      try {
+        const message = JSON.parse(String(payload));
+        if (message.d?.b?.s === 'permission_denied') network.rejectedWrites++;
+        if (message.t === 'c' && message.d?.t === 's' && typeof message.d.d === 'string') network.shutdownReasons.push(message.d.d);
+      } catch {}
     });
     socket.on('framesent', ({ payload }) => {
     try {
@@ -56,13 +62,49 @@ function observe(page) {
   });
   page.on('response', async (response) => {
     const url = new URL(response.url());
-    if (response.status() >= 400) report.httpErrors.push({ status: response.status(), host: url.host, path: url.pathname });
+    if (response.status() >= 400) {
+      const detail = url.hostname === 'identitytoolkit.googleapis.com' ? await response.json().catch(() => null) : null;
+      report.httpErrors.push({ status: response.status(), host: url.host, path: url.pathname, reason: detail?.error?.message });
+      if (url.pathname.endsWith('accounts:signUp')) network.signupDenied = detail?.error?.message;
+    }
     if (url.hostname === 'identitytoolkit.googleapis.com' && url.pathname.endsWith('accounts:signUp') && response.ok()) {
+      network.authenticated = true;
       const data = await response.json().catch(() => null);
-      if (data?.idToken) identities.push({ token: data.idToken, key: url.searchParams.get('key'), uid: data.localId });
+      if (data?.idToken && !identities.some((identity) => identity.uid === data.localId)) identities.push({ token: data.idToken, key: url.searchParams.get('key'), uid: data.localId });
     }
   });
 }
+function cachedState(slot) {
+  const file = authCache ? `${authCache}/${slot}.json` : null;
+  return file && fs.existsSync(file) ? file : undefined;
+}
+async function rememberIdentity(context, slot) {
+  const state = await context.storageState({ indexedDB: true });
+  const identity = await context.pages()[0].evaluate(async () => {
+    const rows = await new Promise((resolve) => {
+      const request = indexedDB.open('firebaseLocalStorageDb');
+      request.onerror = () => resolve([]);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('firebaseLocalStorage')) { db.close(); resolve([]); return; }
+        const read = db.transaction('firebaseLocalStorage').objectStore('firebaseLocalStorage').getAll();
+        read.onerror = () => { db.close(); resolve([]); };
+        read.onsuccess = () => { const values = read.result; db.close(); resolve(values); };
+      };
+    });
+    for (const row of [...rows, ...Object.keys(localStorage).map((key) => ({ fbase_key: key, value: localStorage.getItem(key) }))]) {
+      if (!row.fbase_key?.includes('authUser:')) continue;
+      let user = row.value;
+      if (typeof user === 'string') { try { user = JSON.parse(user); } catch { continue; } }
+      if (user?.uid && user.stsTokenManager?.accessToken) return { uid: user.uid, token: user.stsTokenManager.accessToken, key: user.apiKey ?? row.fbase_key.split(':')[2] };
+    }
+    return null;
+  });
+  assert.ok(identity, 'Authenticated Firebase identity is present in browser storage');
+  if (!identities.some((entry) => entry.uid === identity.uid)) identities.push({ uid: identity.uid, token: identity.token, key: identity.key });
+  if (authCache) fs.writeFileSync(`${authCache}/${slot}.json`, JSON.stringify(state), { mode: 0o600 });
+}
+
 const gyro = () => {
   window.__networkTransitions = [];
   for (const type of ['online', 'offline']) window.addEventListener(type, () => {
@@ -105,12 +147,14 @@ async function allTallies(expected, n = USERS) {
 }
 try {
   for (let i = 0; i < 3; i++) browsers.push(await chromium.launch({ args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] }));
-  const hostContext = await browsers[0].newContext({ viewport: { width: 1440, height: 1000 } });
+  const hostContext = await browsers[0].newContext({ viewport: { width: 1440, height: 1000 }, storageState: cachedState('host') });
   host = await hostContext.newPage();
   observe(host);
   await host.goto(`${BASE}/host`, { waitUntil: 'networkidle' });
-  await host.getByRole('textbox', { name: 'Passcode' }).fill(passcode);
-  await host.getByRole('button', { name: 'Unlock', exact: true }).click();
+  if (await host.getByRole('textbox', { name: 'Passcode' }).count()) {
+    await host.getByRole('textbox', { name: 'Passcode' }).fill(passcode);
+    await host.getByRole('button', { name: 'Unlock', exact: true }).click();
+  }
   await host.locator('img.qr').waitFor({ timeout: 30000 });
   assert.equal(await host.getByRole('button', { name: 'Reopen round', exact: true }).count(), 0, 'Production round is already frozen; leave it unchanged');
   const png = PNG.sync.read(Buffer.from((await host.locator('img.qr').getAttribute('src')).split(',')[1], 'base64'));
@@ -118,18 +162,42 @@ try {
   assert.ok(link, 'QR decodes');
   assert.equal(new URL(link).origin, BASE, 'QR uses new production origin');
   await until('host connected with a QR for the new domain', async () => (await host.locator('.status-line').textContent()).includes('Waiting for the first phone'));
+  await rememberIdentity(hostContext, 'host');
   for (let batch = 0; batch < USERS; batch += 6) {
     await Promise.all(Array.from({ length: 6 }, async (_, j) => {
       const i = batch + j;
-      const context = await browsers[i % browsers.length].newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-      await context.addInitScript(gyro);
-      const page = await context.newPage();
-      phones.push({ context, page, i });
-      observe(page);
-      await page.goto(link, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('button', { name: 'Activate gyroscope', exact: true }).click();
-      await page.locator('.status-line').waitFor();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const context = await browsers[i % browsers.length].newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: cachedState(`voter-${i}`) });
+        await context.addInitScript(gyro);
+        const page = await context.newPage();
+        const actor = { context, page, i };
+        phones.push(actor);
+        observe(page);
+        try {
+          await page.goto(link, { waitUntil: 'domcontentloaded' });
+          await page.getByRole('button', { name: 'Activate gyroscope', exact: true }).click();
+          await page.locator('.status-line').waitFor();
+          const deadline = Date.now() + 30000;
+          for (;;) {
+            const network = networkStates.get(page);
+            if (network.signupDenied === 'TOO_MANY_ATTEMPTS_TRY_LATER' && !network.authenticated) throw new Error('Firebase test-identity provisioning was throttled');
+            if (await page.locator('.status-line').textContent() !== 'Reconnecting') break;
+            assert.ok(Date.now() < deadline, 'Voter did not finish authenticating');
+            await sleep(250);
+          }
+          await rememberIdentity(context, `voter-${i}`);
+          break;
+        } catch (error) {
+          if (!error.message.includes('test-identity provisioning was throttled') || attempt === 2) throw error;
+          await context.close();
+          phones.splice(phones.indexOf(actor), 1);
+          report.onboardingRetries = (report.onboardingRetries ?? 0) + 1;
+          console.log(`Voter ${i + 1}: signup throttled; waiting 5s before another provisioning attempt`);
+          await sleep(5000);
+        }
+      }
     }));
+    await until(`voters ${batch + 1}–${batch + 6} finish signing in`, async () => new Set(identities.map((v) => v.uid)).size >= batch + 7);
     console.log(`Joined ${batch + 6}/${USERS}`);
   }
   await until('host and all 60 voters finish signing in with independent Firebase identities', async () => new Set(identities.map((v) => v.uid)).size === USERS + 1);
@@ -208,11 +276,17 @@ try {
   await Promise.all(browsers.map((browser) => browser.close()));
   // Delete only anonymous accounts created by this harness.
   report.identitiesRemoved = 0;
-  for (const identity of identities) {
+  const retainForRetry = authCache && !report.passed;
+  report.identitiesRetained = retainForRetry ? identities.length : 0;
+  for (const identity of retainForRetry ? [] : identities) {
     const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${identity.key}`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken: identity.token }),
     }).catch(() => null);
     if (res?.ok) report.identitiesRemoved++;
+  }
+  if (authCache && report.passed) {
+    for (const slot of ['host', ...Array.from({ length: USERS }, (_, i) => `voter-${i}`)]) fs.rmSync(`${authCache}/${slot}.json`, { force: true });
+    try { fs.rmdirSync(authCache); } catch {}
   }
   report.finished = new Date().toISOString();
   fs.writeFileSync(`${output}/report.json`, JSON.stringify(report, null, 2));
