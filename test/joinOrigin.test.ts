@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chooseJoinOrigin, joinUrl } from '../lib/joinOrigin.ts';
 
-const HERE = 'https://vote-tilt-git-main-thibblab.vercel.app';
-const PUBLIC = 'https://vote-tilt.vercel.app';
+const HERE = 'https://tilt2vote-git-main-thibblab.vercel.app';
+const PUBLIC = 'https://tilt2vote.vercel.app';
 
 test('a reachable origin is used as-is, fallback or not', () => {
   for (const canonical of [PUBLIC, '']) {

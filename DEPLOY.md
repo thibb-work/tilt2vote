@@ -1,12 +1,12 @@
-# Deploying vote-tilt
+# Deploying tilt2vote
 
 Everything below runs on the Mac. Nothing here needs the Windows machine.
 
 ## 1. Clone
 
 ```bash
-git clone https://github.com/thibb-corp/vote-tilt.git
-cd vote-tilt
+git clone https://github.com/thibb-work/tilt2vote.git
+cd tilt2vote
 npm install
 ```
 
@@ -36,7 +36,7 @@ in again.
 ```bash
 npm i -g vercel
 vercel login          # device-code flow, opens a browser
-vercel link           # scope: thibb-work, project name: vote-tilt
+vercel link           # scope: thibblab, project name: tilt2vote
 
 for k in NEXT_PUBLIC_FIREBASE_API_KEY NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
          NEXT_PUBLIC_FIREBASE_DATABASE_URL NEXT_PUBLIC_FIREBASE_PROJECT_ID \
@@ -130,7 +130,7 @@ node scripts/check-presence.mjs
 
 ## The demo page (`/demo`)
 
-`https://vote-tilt.vercel.app/demo` exists for one reason: opening the bare URL
+`https://tilt2vote.vercel.app/demo` exists for one reason: opening the bare URL
 without a QR code shows a "Scan to join" wall, which makes a working product look
 broken to anyone who just followed the link. `/demo` is the way out of that dead
 end, and the empty state now links to it.

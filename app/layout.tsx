@@ -16,7 +16,7 @@ const body = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Tilt to vote',
+  title: 'tilt2vote',
   description: 'Tilt your phone to pick what gets demoed next.',
 };
 

@@ -32,7 +32,7 @@ const LEVEL: Aim = { heading: null, magnitude: 0 };
 /**
  * The self-serve demo.
  *
- * Opening vote-tilt.vercel.app without a QR code shows a "Scan to join" wall,
+ * Opening tilt2vote.vercel.app without a QR code shows a "Scan to join" wall,
  * which makes a working product look broken to anyone who just followed the
  * link. This is the answer to that: a dial that is already moving, and a needle
  * the visitor drives themselves.
