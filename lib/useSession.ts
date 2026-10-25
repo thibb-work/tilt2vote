@@ -24,23 +24,38 @@ export function useSession(): SessionRow | null {
     let alive = true;
     let stop: (() => void) | undefined;
 
-    // The rules require an identity even to read, so wait for the anonymous
-    // sign-in that every other client path already depends on.
-    void roomAuth()
-      .then(() => {
-        if (!alive) return;
-        stop = onValue(ref(roomDb(), `sessions/${SESSION_SLUG}`), (snap) => {
-          if (alive) setSession(toSessionRow(snap.val()));
-        });
-      })
-      .catch(() => {
-        // Staying null is the honest answer: the caller already renders a
-        // fallback round rather than an error, and a failed sign-in means
-        // there is nothing trustworthy to show.
-      });
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const retrySubscription = () => {
+      if (!alive) return;
+      stop?.();
+      stop = undefined;
+      clearTimeout(retry);
+      retry = setTimeout(subscribe, 3000);
+    };
+
+    // Both the room connection and the round listener need to recover after a
+    // refused first sign-in. Recovering only the room lets a phone vote while
+    // silently missing every later lock, reopen, and option change.
+    const subscribe = () => {
+      void roomAuth()
+        .then(() => {
+          if (!alive) return;
+          stop = onValue(
+            ref(roomDb(), `sessions/${SESSION_SLUG}`),
+            (snap) => {
+              if (alive) setSession(toSessionRow(snap.val()));
+            },
+            retrySubscription,
+          );
+        })
+        .catch(retrySubscription);
+    };
+    subscribe();
 
     return () => {
       alive = false;
+      clearTimeout(retry);
       stop?.();
     };
   }, []);

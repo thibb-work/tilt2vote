@@ -1,5 +1,5 @@
 /** Real production pages and Firebase connections; no mocked network traffic.
- * Sensor events are simulated because a desktop has no physical gyroscope.
+ * Sensor events and their permission grant are simulated on desktop.
  * HOST_PASSCODE_FILE contains only the host passcode; never logs credentials.
  */
 import { chromium } from 'playwright';
@@ -21,6 +21,7 @@ const report = { base: BASE, users: USERS, started: new Date().toISOString(), ch
 const browsers = [];
 const phones = [];
 const identities = [];
+const networkStates = new Map();
 let host;
 let lockedByTest = false;
 let phoneWrites = 0;
@@ -37,13 +38,22 @@ async function until(label, fn, timeout = 30000) {
   return ms;
 }
 function observe(page) {
+  const network = { socketsOpened: 0, socketsClosed: 0, phoneWrites: 0, rejectedWrites: 0 };
+  networkStates.set(page, network);
   page.on('pageerror', (e) => report.pageErrors.push(e.message));
-  page.on('websocket', (socket) => socket.on('framesent', ({ payload }) => {
+  page.on('websocket', (socket) => {
+    network.socketsOpened++;
+    socket.on('close', () => network.socketsClosed++);
+    socket.on('framereceived', ({ payload }) => {
+      try { if (JSON.parse(String(payload)).d?.b?.s === 'permission_denied') network.rejectedWrites++; } catch {}
+    });
+    socket.on('framesent', ({ payload }) => {
     try {
       const message = JSON.parse(String(payload));
-      if (message.d?.a === 'p' && message.d?.b?.p?.includes('/phones/')) phoneWrites++;
+      if (message.d?.a === 'p' && message.d?.b?.p?.includes('/phones/')) { phoneWrites++; network.phoneWrites++; }
     } catch { /* Firebase may split a frame; capacity assertions use the UI. */ }
-  }));
+    });
+  });
   page.on('response', async (response) => {
     const url = new URL(response.url());
     if (response.status() >= 400) report.httpErrors.push({ status: response.status(), host: url.host, path: url.pathname });
@@ -54,6 +64,14 @@ function observe(page) {
   });
 }
 const gyro = () => {
+  window.__networkTransitions = [];
+  for (const type of ['online', 'offline']) window.addEventListener(type, () => {
+    window.__networkTransitions.push({ type, online: navigator.onLine, at: Date.now() });
+  });
+  // Desktop Chromium has no sensor to grant. Model an approving handset.
+  window.DeviceOrientationEvent = class extends Event {
+    static async requestPermission() { return 'granted'; }
+  };
   window.__pose = { beta: 0, gamma: 0 };
   window.__moving = false;
   window.__wedge = null;
@@ -68,7 +86,11 @@ const gyro = () => {
       const angle = (window.__wedge * 60 + Math.sin(performance.now() / 500) * 10) * Math.PI / 180;
       window.__pose = { beta: -38 * Math.cos(angle), gamma: 38 * Math.sin(angle) };
     }
-    window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { ...window.__pose, alpha: 0 }));
+    const event = new Event('deviceorientation');
+    for (const [key, value] of Object.entries({ ...window.__pose, alpha: 0 })) {
+      Object.defineProperty(event, key, { value });
+    }
+    window.dispatchEvent(event);
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -110,7 +132,7 @@ try {
     }));
     console.log(`Joined ${batch + 6}/${USERS}`);
   }
-  assert.equal(new Set(identities.map((v) => v.uid)).size, USERS + 1, 'Every browser context has an independent Firebase identity');
+  await until('host and all 60 voters finish signing in with independent Firebase identities', async () => new Set(identities.map((v) => v.uid)).size === USERS + 1);
   await until('all 60 phones present, flat, and receiving the tally', () => allTallies([0, 0, 0, 0, 0, 0]));
   await until('host renders 60 individual dots', async () => await host.locator('.dot-phone').count() === USERS);
   for (let wedge = 0; wedge < 6; wedge++) {
@@ -153,18 +175,33 @@ try {
   await until('abstention clears votes while retaining 60 participants', () => allTallies([0, 0, 0, 0, 0, 0]));
   await Promise.all(phones.slice(0, 6).map(({ context }) => context.setOffline(true)));
   await until('six disconnected phones leave the host count', async () => await total(host) === 54, 45000);
+  await until('all six phones observe the outage', async () => (await Promise.all(phones.slice(0, 6).map(({ page }) => page.evaluate(() => !navigator.onLine && document.querySelector('.status-line')?.textContent === 'Reconnecting')))).every(Boolean));
+  await sleep(2000);
   await Promise.all(phones.slice(0, 6).map(({ context }) => context.setOffline(false)));
   await until('six reconnecting phones restore the full room', () => allTallies([0, 0, 0, 0, 0, 0]), 45000);
   assert.deepEqual(report.pageErrors, [], 'No JavaScript errors');
-  assert.deepEqual(report.httpErrors, [], 'No failed HTTP responses');
+  report.recoveredAuthResponses = report.httpErrors.filter((e) => e.host === 'identitytoolkit.googleapis.com' && e.path.endsWith('accounts:signUp') && [400, 429].includes(e.status));
+  assert.deepEqual(report.httpErrors.filter((e) => !report.recoveredAuthResponses.includes(e)), [], 'No other failed HTTP responses');
   await Promise.all(phones.map(({ page }) => page.goto('about:blank')));
   await until('test voters cleanly leave the room', async () => await total(host) === 0, 45000);
   report.passed = true;
 } catch (error) {
   report.passed = false;
-  report.failure = error.message;
-  console.error(error.message);
+  report.failure = error.message.replaceAll(passcode, '[REDACTED]');
+  console.error(report.failure);
   if (host) await host.screenshot({ path: `${output}/failure.png`, fullPage: true }).catch(() => {});
+  report.diagnostics = await Promise.all([host, ...phones.map((p) => p.page)].filter(Boolean).map(async (page) => ({
+    network: networkStates.get(page),
+    state: await page.evaluate(() => ({
+      online: navigator.onLine,
+      visibility: document.visibilityState,
+      networkTransitions: window.__networkTransitions,
+      status: document.querySelector('.status-line')?.textContent,
+      warning: document.querySelector('.warn')?.textContent,
+      total: document.querySelector('.hub-label')?.textContent,
+    })).catch(() => null),
+  })));
+  if (phones.length) await phones[0].page.screenshot({ path: `${output}/failure-voter.png`, fullPage: true }).catch(() => {});
   process.exitCode = 1;
 } finally {
   if (lockedByTest && host) await host.getByRole('button', { name: 'Reopen round', exact: true }).click().catch(() => {});

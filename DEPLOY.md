@@ -159,19 +159,21 @@ involved.
 
 ### Rotating the host passcode
 
-`scripts/rotate-secrets.sh` mints both secrets and pushes them. To change only
-the passcode, edit `HOST_PASSCODE` in `.env.local` and push it without letting
-the value reach the terminal:
+The host passcode is a Vercel environment variable, not a Firebase credential.
+Run this from the checkout to generate a fresh passcode, save it in `.env.local`
+with owner-only permissions, update `HOST_PASSCODE` in Vercel production, and
+redeploy so the change takes effect:
 
 ```bash
-set -a; . ./.env.local; set +a
-for e in production preview development; do
-  vercel env rm HOST_PASSCODE "$e" --yes >/dev/null 2>&1
-  printf '%s' "$HOST_PASSCODE" | vercel env add HOST_PASSCODE "$e"
-done
-vercel --prod        # env changes only take effect on a new deployment
+bash scripts/reset-host-passcode.sh
 ```
 
-`HOST_TOKEN_SECRET` is independent of the passcode. Changing either only
-invalidates the existing host cookie, so you sign in again and nothing else
-moves — no migration, no database change.
+The command never prints the passcode. Read the `HOST_PASSCODE` line in your
+local editor to sign in at `https://tilt2vote.vercel.app/host`.
+An existing `.env.local` is backed up locally before replacement. If deployment
+fails, the generated passcode remains in `.env.local`; retry the Vercel update
+or deployment using that value rather than generating another one.
+
+`HOST_TOKEN_SECRET` is independent of the passcode. Changing either invalidates
+existing host cookies, so sign in again. Firebase needs no migration or password
+update. The older `rotate-secrets.sh` command forwards to the same current reset command.

@@ -46,14 +46,14 @@ app look green:
 
 ```bash
 npx playwright install chromium
-# Store only the production host passcode in a private temporary file.
-HOST_PASSCODE_FILE=/private/tmp/tilt2vote-host-passcode node test/e2e/production-60.mjs
+# Read the passcode saved by scripts/reset-host-passcode.sh.
+node --env-file=.env.local test/e2e/production-60.mjs
 ```
 
 This opens one authenticated host and 60 isolated mobile browser contexts on
 `https://tilt2vote.vercel.app` (override with `BASE_URL`). The real production
-JavaScript and Firebase connections handle all traffic; only the motion sensor
-is simulated. It decodes the actual QR, checks every wedge and every phone's
+JavaScript and Firebase connections handle all traffic; the motion sensor and its permission grant
+are simulated. It decodes the actual QR, checks every wedge and every phone's
 received tally, streams movement for 60 seconds, locks and reopens votes,
 abstains, disconnects and reconnects six phones, then checks departure cleanup.
 `SOAK_SECONDS` can extend the streaming phase.
@@ -65,3 +65,19 @@ deletes only the anonymous accounts it created. Screenshots and a credential-fre
 JSON report go in the gitignored `output/playwright/production-60/` directory.
 A successful run must report `passed: true`; screenshots alone prove no capacity
 claim. Real iOS motion permission and venue Wi-Fi still need a physical phone.
+
+
+## Round subscription after refused sign-in
+
+```bash
+node --env-file=.env.local test/e2e/session-recovery.mjs
+```
+
+This intentionally refuses the first Firebase sign-in, then restores it and
+requires the same phone to join, receive a lock, and receive a reopen without
+reloading. It uses the shared production session; run outside an event.
+It reproduced a phone that recovered its room connection while permanently
+missing round updates. The session listener now retries both authentication and
+subscription failures. The capacity harness records transient rejected sign-ups
+and requires every voter to finish authenticating and receive round updates;
+other HTTP failures still fail the run.
