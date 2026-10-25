@@ -1,0 +1,96 @@
+{
+  "productionUrl": "https://tilt2vote.vercel.app",
+  "applicationCommit": "678222f557d59769cb1ab588eba13fbaaba52c82",
+  "finished": "2026-10-25T17:32:05.507Z",
+  "users": 60,
+  "sensorInput": "simulated deviceorientation events and permission grant",
+  "transport": "real production Vercel pages and Firebase connections",
+  "streamDurationMs": 60497,
+  "streamingPhoneWrites": 29095,
+  "streamingWritesPerSecond": 480.93,
+  "signupProvisioningThrottleResponses": 22,
+  "onboardingRetries": 22,
+  "checks": [
+    {
+      "label": "host connected with a QR for the new domain",
+      "ms": 1
+    },
+    {
+      "label": "host and all 60 voters finish signing in with independent Firebase identities",
+      "ms": 1
+    },
+    {
+      "label": "all 60 phones present, flat, and receiving the tally",
+      "ms": 249
+    },
+    {
+      "label": "host renders 60 individual dots",
+      "ms": 2
+    },
+    {
+      "label": "all 60 votes move to wedge 1 on host and every phone",
+      "ms": 467
+    },
+    {
+      "label": "all 60 votes move to wedge 2 on host and every phone",
+      "ms": 555
+    },
+    {
+      "label": "all 60 votes move to wedge 3 on host and every phone",
+      "ms": 584
+    },
+    {
+      "label": "all 60 votes move to wedge 4 on host and every phone",
+      "ms": 683
+    },
+    {
+      "label": "all 60 votes move to wedge 5 on host and every phone",
+      "ms": 1086
+    },
+    {
+      "label": "all 60 votes move to wedge 6 on host and every phone",
+      "ms": 510
+    },
+    {
+      "label": "votes split equally across all six options",
+      "ms": 571
+    },
+    {
+      "label": "all 60 continuously moving voters remain counted and healthy",
+      "ms": 60497,
+      "samples": 59
+    },
+    {
+      "label": "locking reaches all 60 phones",
+      "ms": 1907
+    },
+    {
+      "label": "reopening restores all 60 live votes",
+      "ms": 2342
+    },
+    {
+      "label": "abstention clears votes while retaining 60 participants",
+      "ms": 458
+    },
+    {
+      "label": "six disconnected phones leave the host count",
+      "ms": 254
+    },
+    {
+      "label": "all six phones observe the outage",
+      "ms": 1
+    },
+    {
+      "label": "six reconnecting phones restore the full room",
+      "ms": 995
+    },
+    {
+      "label": "test voters cleanly leave the room",
+      "ms": 254
+    }
+  ],
+  "pageErrors": [],
+  "identitiesRemoved": 61,
+  "identitiesRetained": 0,
+  "passed": true
+}

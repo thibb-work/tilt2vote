@@ -93,3 +93,24 @@ check still requires 60 independent authenticated voters connected together.
 The recovery regression also seeds Firebase's remembered WebSocket-failure flag.
 The app uses WebSockets explicitly because its CSP blocks the SDK's script-based
 long-poll transport. Disconnect presence cleanup is rearmed on every connection.
+
+
+## Last production verification
+
+2026-10-25, application commit `678222f`: all 60 independent voter browsers
+passed every capacity check on `https://tilt2vote.vercel.app`. The streaming
+phase lasted 60.5 seconds and sent 29,095 phone writes (about 481/second).
+All six options, lock/reopen, abstention, a two-second outage for six phones,
+reconnection, and clean departure passed. Reconnection restored the full room
+in 995 ms. All 61 test identities and their private cache files were removed.
+
+Firebase throttled 22 anonymous signup attempts during test setup. Successful
+identities were retained while missing identities were provisioned with bounded
+backoff; all 60 were authenticated and connected before capacity checks began.
+This verifies concurrent operation with simulated sensor input, not a
+simultaneous burst of 60 new account creations or physical venue Wi-Fi.
+The focused first-sign-in/remembered-socket-failure regression also passed.
+
+The credential-free [result summary](production-60-result.json) records the
+checks and their timings. The full local report and screenshots are under
+`output/playwright/production-60/`.

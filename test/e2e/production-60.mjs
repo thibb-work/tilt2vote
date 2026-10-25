@@ -163,10 +163,10 @@ try {
   assert.equal(new URL(link).origin, BASE, 'QR uses new production origin');
   await until('host connected with a QR for the new domain', async () => (await host.locator('.status-line').textContent()).includes('Waiting for the first phone'));
   await rememberIdentity(hostContext, 'host');
-  for (let batch = 0; batch < USERS; batch += 6) {
-    await Promise.all(Array.from({ length: 6 }, async (_, j) => {
-      const i = batch + j;
-      for (let attempt = 0; attempt < 3; attempt++) {
+  for (let round = 0; round < 6 && phones.length < USERS; round++) {
+    const missing = Array.from({ length: USERS }, (_, i) => i).filter((i) => !phones.some((phone) => phone.i === i));
+    for (let batch = 0; batch < missing.length; batch += 6) {
+      await Promise.all(missing.slice(batch, batch + 6).map(async (i) => {
         const context = await browsers[i % browsers.length].newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: cachedState(`voter-${i}`) });
         await context.addInitScript(gyro);
         const page = await context.newPage();
@@ -186,20 +186,22 @@ try {
             await sleep(250);
           }
           await rememberIdentity(context, `voter-${i}`);
-          break;
         } catch (error) {
-          if (!error.message.includes('test-identity provisioning was throttled') || attempt === 2) throw error;
+          if (!error.message.includes('test-identity provisioning was throttled')) throw error;
           await context.close();
           phones.splice(phones.indexOf(actor), 1);
           report.onboardingRetries = (report.onboardingRetries ?? 0) + 1;
-          console.log(`Voter ${i + 1}: signup throttled; waiting 5s before another provisioning attempt`);
-          await sleep(5000);
         }
-      }
-    }));
-    await until(`voters ${batch + 1}–${batch + 6} finish signing in`, async () => new Set(identities.map((v) => v.uid)).size >= batch + 7);
-    console.log(`Joined ${batch + 6}/${USERS}`);
+      }));
+      console.log(`Authenticated test voters: ${phones.length}/${USERS}`);
+    }
+    if (phones.length < USERS && round < 5) {
+      const delay = Math.min(30000 * (round + 1), 60000);
+      console.log(`Firebase throttled ${USERS - phones.length} test identities; retaining successful sessions and waiting ${delay / 1000}s`);
+      await sleep(delay);
+    }
   }
+  assert.equal(phones.length, USERS, 'Firebase signup throttle prevented provisioning all 60 test identities');
   await until('host and all 60 voters finish signing in with independent Firebase identities', async () => new Set(identities.map((v) => v.uid)).size === USERS + 1);
   await until('all 60 phones present, flat, and receiving the tally', () => allTallies([0, 0, 0, 0, 0, 0]));
   await until('host renders 60 individual dots', async () => await host.locator('.dot-phone').count() === USERS);
