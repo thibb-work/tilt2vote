@@ -41,3 +41,27 @@ app look green:
 - **Truncate a log before re-running into it.** A poll that waits for `passed`
   to appear will match the *previous* run's output and report a stale result --
   which is how a fix that worked first time looked like it had failed twice.
+
+## 60 voters on production
+
+```bash
+npx playwright install chromium
+# Store only the production host passcode in a private temporary file.
+HOST_PASSCODE_FILE=/private/tmp/tilt2vote-host-passcode node test/e2e/production-60.mjs
+```
+
+This opens one authenticated host and 60 isolated mobile browser contexts on
+`https://tilt2vote.vercel.app` (override with `BASE_URL`). The real production
+JavaScript and Firebase connections handle all traffic; only the motion sensor
+is simulated. It decodes the actual QR, checks every wedge and every phone's
+received tally, streams movement for 60 seconds, locks and reopens votes,
+abstains, disconnects and reconnects six phones, then checks departure cleanup.
+`SOAK_SECONDS` can extend the streaming phase.
+
+Run when no event is using the shared production round: locking and reopening
+change its global session state. An already locked round makes the harness stop
+without changing it. It uses its own random room, closes its connections, and
+deletes only the anonymous accounts it created. Screenshots and a credential-free
+JSON report go in the gitignored `output/playwright/production-60/` directory.
+A successful run must report `passed: true`; screenshots alone prove no capacity
+claim. Real iOS motion permission and venue Wi-Fi still need a physical phone.
