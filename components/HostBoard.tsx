@@ -13,6 +13,7 @@ import { hostRoomIdSnapshot, retireHostRoomId, subscribeHostRoomId } from '@/lib
 
 export function HostBoard() {
   const session = useSession();
+  const options = session?.options ?? FALLBACK_OPTIONS;
 
   // Null on the server: there is no room id until a browser mints one, and one
   // that appeared in server-rendered HTML would defeat the point of having it.
@@ -20,7 +21,7 @@ export function HostBoard() {
 
   // The host watches every phone individually and never publishes a position of
   // its own, so it can draw the room without appearing in it.
-  const room = useRoom({ role: 'host', roomId });
+  const room = useRoom({ role: 'host', roomId, optionCount: options.length });
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,9 +37,8 @@ export function HostBoard() {
     return () => clearTimeout(t);
   }, [armed]);
 
-  const options = session?.options ?? FALLBACK_OPTIONS;
   const frozen = session?.frozen ?? false;
-  const counts = frozen ? talliesToCounts(session?.frozen_tallies) : room.counts;
+  const counts = frozen ? talliesToCounts(session?.frozen_tallies, options.length) : room.counts;
 
   // Whether this screen is actually serving the room, rather than just having
   // rendered. A QR code costs nothing to draw and looks identical either way,
@@ -87,7 +87,7 @@ export function HostBoard() {
           />
         </div>
 
-        <section className="tally">
+        <section className={`tally${options.length > 6 ? ' is-compact' : ''}`}>
           <div className="tally-head">
             <h1>{frozen ? 'Locked' : 'Tilt to vote'}</h1>
             <div className={`status-line${serving ? '' : ' is-warn'}`}>
@@ -145,7 +145,7 @@ export function HostBoard() {
           <button
             className="ctl is-primary"
             disabled={busy}
-            onClick={() => post('/api/host/freeze', { tallies: countsToTallies(room.counts) })}
+            onClick={() => post('/api/host/freeze', { tallies: countsToTallies(room.counts), optionCount: options.length })}
           >
             Lock votes
           </button>

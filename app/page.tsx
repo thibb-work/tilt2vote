@@ -16,6 +16,7 @@ const FLAT: TiltReading = { wedge: null, magnitude: 0, heading: null };
 
 export default function VotePage() {
   const session = useSession();
+  const options = session?.options ?? FALLBACK_OPTIONS;
 
   // The room id arrives in the QR link and nowhere else, so a phone that did not
   // scan has no path to write to. Read it straight off the URL rather than
@@ -26,7 +27,7 @@ export default function VotePage() {
   );
   const joined = isRoomId(roomId) ? roomId : null;
 
-  const room = useRoom({ role: 'voter', roomId: joined });
+  const room = useRoom({ role: 'voter', roomId: joined, optionCount: options.length });
 
   const [active, setActive] = useState(false);
   const [reading, setReading] = useState<TiltReading>(FLAT);
@@ -38,7 +39,7 @@ export default function VotePage() {
     if (!active) return;
 
     const onOrientation = (event: DeviceOrientationEvent) => {
-      latest.current = tracker.current.update({ beta: event.beta, gamma: event.gamma });
+      latest.current = tracker.current.update({ beta: event.beta, gamma: event.gamma }, options.length);
     };
     window.addEventListener('deviceorientation', onOrientation, true);
 
@@ -69,7 +70,7 @@ export default function VotePage() {
       window.removeEventListener('deviceorientation', onOrientation, true);
       cancelAnimationFrame(frame);
     };
-  }, [active]);
+  }, [active, options.length]);
 
   const { publish } = room;
   const frozen = session?.frozen ?? false;
@@ -109,8 +110,7 @@ export default function VotePage() {
     );
   }
 
-  const options = session?.options ?? FALLBACK_OPTIONS;
-  const frozenCounts = talliesToCounts(session?.frozen_tallies);
+  const frozenCounts = talliesToCounts(session?.frozen_tallies, options.length);
   const aiming = reading.wedge !== null ? options[reading.wedge] : null;
 
   // Writing into a room no host screen is reading. The dial still works and the

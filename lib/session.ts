@@ -1,4 +1,4 @@
-import { SESSION_SLUG } from './constants.ts';
+import { SESSION_SLUG, validOptions } from './constants.ts';
 import type { SessionRow } from './types.ts';
 
 /**
@@ -17,8 +17,7 @@ export function toSessionRow(value: unknown): SessionRow | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
   const row = value as Partial<SessionRow>;
-  if (!Array.isArray(row.options)) return null;
-  if (!row.options.every((o) => typeof o === 'string')) return null;
+  if (!validOptions(row.options)) return null;
 
   return {
     slug: typeof row.slug === 'string' ? row.slug : SESSION_SLUG,

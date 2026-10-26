@@ -9,6 +9,12 @@ export const WEDGE_COLORS = [
   '#3DDC84',
   '#22D3EE',
   '#A78BFA',
+  '#F472B6',
+  '#FB7185',
+  '#A3E635',
+  '#2DD4BF',
+  '#60A5FA',
+  '#C084FC',
 ] as const;
 
 export const FALLBACK_OPTIONS = [
@@ -38,3 +44,17 @@ export const PUBLISH_INTERVAL_MS = 100;
 
 /** Longest option label the dial can render without the text overrunning its wedge. */
 export const MAX_OPTION_LEN = 48;
+
+/** Keep wedges large enough to label and aim at on a phone. */
+export const MIN_OPTIONS = 2;
+export const MAX_OPTIONS = WEDGE_COLORS.length;
+
+export function isOptionCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= MIN_OPTIONS && value <= MAX_OPTIONS;
+}
+
+export function validOptions(value: unknown): value is string[] {
+  return Array.isArray(value) && isOptionCount(value.length) && value.every(
+    (label) => typeof label === 'string' && label.trim().length > 0 && label.trim().length <= MAX_OPTION_LEN,
+  );
+}

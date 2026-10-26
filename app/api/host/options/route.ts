@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isHost, sameOrigin } from '@/lib/hostAuth';
 import { setOptions } from '@/lib/firebase/session';
-import { MAX_OPTION_LEN } from '@/lib/constants';
+import { MAX_OPTION_LEN, MIN_OPTIONS, MAX_OPTIONS, validOptions } from '@/lib/constants';
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) {
@@ -12,21 +12,15 @@ export async function POST(request: Request) {
   }
 
   const { options } = (await request.json().catch(() => ({}))) as { options?: unknown };
-  if (
-    !Array.isArray(options) ||
-    options.length !== 6 ||
-    options.some(
-      (o) => typeof o !== 'string' || o.trim() === '' || o.trim().length > MAX_OPTION_LEN,
-    )
-  ) {
+  if (!validOptions(options)) {
     return NextResponse.json(
-      { error: `Six non-empty labels, each at most ${MAX_OPTION_LEN} characters` },
+      { error: `${MIN_OPTIONS}–${MAX_OPTIONS} non-empty labels, each at most ${MAX_OPTION_LEN} characters` },
       { status: 400 },
     );
   }
 
   try {
-    await setOptions((options as string[]).map((o) => o.trim()));
+    await setOptions(options.map((o) => o.trim()));
   } catch (error) {
     // Driver messages name paths and credentials. The host has no use for that
     // on a projector, and it is free reconnaissance if the screen is

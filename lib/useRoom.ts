@@ -84,7 +84,14 @@ interface Wire {
  * publishing until the host freezes the round; the freeze is what turns live
  * positions into a result.
  */
-export function useRoom({ role, roomId }: { role: Role; roomId: string | null }): Room {
+export function useRoom({ role, roomId, optionCount = WEDGE_COUNT }: {
+  role: Role;
+  roomId: string | null;
+  optionCount?: number;
+}): Room {
+  // Timers read the latest layout without disconnecting phones on every edit.
+  const countRef = useRef(optionCount);
+  useEffect(() => { countRef.current = optionCount; }, [optionCount]);
   const [counts, setCounts] = useState<number[]>(zeros);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<RoomStatus>('connecting');
@@ -241,7 +248,7 @@ export function useRoom({ role, roomId }: { role: Role; roomId: string | null })
             // watching this exact room -- see lib/roomWatch.ts. An empty
             // snapshot proves nothing, so it is not counted as one.
             if (v) tallyAt.current = Date.now();
-            setCounts(Array.isArray(v?.c) && v.c.length === WEDGE_COUNT ? v.c : zeros());
+            setCounts(Array.isArray(v?.c) && v.c.length === countRef.current ? v.c : zeros());
             setTotal(typeof v?.n === 'number' ? v.n : 0);
           }),
           () => {
@@ -295,7 +302,7 @@ export function useRoom({ role, roomId }: { role: Role; roomId: string | null })
           next.push({ id, heading: r.heading, magnitude: r.magnitude });
         }
         setReadings(next);
-        setCounts(countsFrom(next));
+        setCounts(countsFrom(next, countRef.current));
         setTotal(next.length);
         frame = requestAnimationFrame(tick);
       };
@@ -313,7 +320,7 @@ export function useRoom({ role, roomId }: { role: Role; roomId: string | null })
           // rejection used to go straight on the floor, which is how a screen
           // could keep showing a healthy QR code while writing nowhere.
           void set(tallyRef, {
-            c: countsFrom(alive),
+            c: countsFrom(alive, countRef.current),
             n: alive.length,
             t: Date.now() + skew.current,
           }).then(
@@ -362,5 +369,6 @@ export function useRoom({ role, roomId }: { role: Role; roomId: string | null })
     pending.current = { heading, magnitude };
   }, []);
 
-  return { counts, total, status, watch, fault, readings, publish };
+  const visibleCounts = Array.from({ length: optionCount }, (_, w) => counts[w] ?? 0);
+  return { counts: visibleCounts, total, status, watch, fault, readings, publish };
 }

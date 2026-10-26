@@ -3,7 +3,6 @@
 import type { CSSProperties } from 'react';
 import { polar, sectorPath, wrapLabel } from '@/lib/geometry';
 import { PUBLISH_INTERVAL_MS, WEDGE_COLORS } from '@/lib/constants';
-import { WEDGE_COUNT, WEDGE_DEG } from '@/lib/tilt';
 import { fillFor, needsLightText } from '@/lib/density';
 import { dotsFor, type PhoneReading } from '@/lib/dots';
 
@@ -47,20 +46,22 @@ export function Dial({
     heading === null ? null : polar(CX, CY, R_INNER + reach * (R_OUTER - R_INNER - 22), heading);
 
   // Darkness is relative to whichever wedge is winning, so the dial always
-  // shows a leader instead of six equally pale tiles.
+  // shows a leader instead of equally pale tiles.
+  const wedgeDeg = 360 / options.length;
+  const labelRadius = options.length > 6 ? 132 : R_LABEL;
+  const labelChars = options.length > 6 ? 8 : 12;
   const peak = Math.max(0, ...counts);
 
   return (
     <svg className="dial" viewBox="0 0 400 400" role="img" aria-label="Tilt dial">
-      {Array.from({ length: WEDGE_COUNT }, (_, w) => {
-        const centre = w * WEDGE_DEG;
+      {options.map((label, w) => {
+        const centre = w * wedgeDeg;
         const colour = WEDGE_COLORS[w];
         const isActive = active === w;
-        const label = options[w] ?? '';
-        const lines = wrapLabel(label, 12);
+        const lines = wrapLabel(label, labelChars);
 
-        const labelAt = polar(CX, CY, R_LABEL, centre);
-        const countAt = polar(CX, CY, R_COUNT, centre);
+        const labelAt = polar(CX, CY, labelRadius, centre);
+        const countAt = polar(CX, CY, (options.length > 6 ? 174 : R_COUNT), centre);
         const fill = fillFor(counts[w] ?? 0, peak);
         const text = needsLightText(fill) ? INK_INVERSE : INK;
 
@@ -68,7 +69,7 @@ export function Dial({
           <g key={w} className={`sector${isActive ? ' is-active' : ''}`}>
             <path
               className="sector-fill"
-              d={sectorPath(CX, CY, R_INNER, R_OUTER, centre - WEDGE_DEG / 2 + 1.2, centre + WEDGE_DEG / 2 - 1.2)}
+              d={sectorPath(CX, CY, R_INNER, R_OUTER, centre - wedgeDeg / 2 + 1.2, centre + wedgeDeg / 2 - 1.2)}
               fill={colour}
               fillOpacity={fill}
               stroke={isActive ? INK : colour}

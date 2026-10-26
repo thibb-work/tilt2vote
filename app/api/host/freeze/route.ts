@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isHost, sameOrigin } from '@/lib/hostAuth';
 import { freeze } from '@/lib/firebase/session';
+import { isOptionCount } from '@/lib/constants';
 import { parseTallies } from '@/lib/tally';
 
 /**
@@ -16,8 +17,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { tallies?: unknown };
-  const tallies = parseTallies(body.tallies);
+  const body = (await request.json().catch(() => ({}))) as { tallies?: unknown; optionCount?: unknown };
+  const optionCount = body.optionCount ?? 6;
+  const tallies = isOptionCount(optionCount) ? parseTallies(body.tallies, optionCount) : null;
   if (!tallies) {
     return NextResponse.json({ error: 'Malformed tallies' }, { status: 400 });
   }
