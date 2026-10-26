@@ -389,6 +389,22 @@ body {
   gap: clamp(8px, 1.1vh, 18px);
 }
 
+.tally.is-compact {
+  gap: 8px;
+}
+
+.tally.is-compact .row {
+  padding-block: 6px;
+}
+
+.tally.is-compact .row-label {
+  font-size: clamp(16px, 1.6vw, 26px);
+}
+
+.tally.is-compact .row-count {
+  font-size: clamp(28px, 3.8vh, 42px);
+}
+
 .tally-head {
   display: flex;
   align-items: baseline;
@@ -465,18 +481,27 @@ body {
   bottom: 0;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   padding: 14px;
-  opacity: 0.07;
-  transition: opacity 0.25s ease;
   background: linear-gradient(0deg, rgba(250, 245, 238, 0.94), transparent);
   z-index: 30;
 }
 
-.controls:hover,
-.controls:focus-within {
-  opacity: 1;
+@media (max-width: 600px) {
+  .host {
+    padding-bottom: 144px;
+  }
+
+  .controls {
+    gap: 8px;
+  }
+
+  .controls .ctl {
+    font-size: 15px;
+    padding: 12px 16px;
+  }
 }
 
 .ctl {
@@ -560,6 +585,13 @@ body {
 }
 
 .editor {
+  border: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  color: var(--ink);
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -591,9 +623,36 @@ body {
 
 .editor-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+}
+
+.editor-hint {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.editor .field {
+  background: var(--bg);
+}
+
+.editor-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-count select {
+  width: 90px;
+}
+
+.editor-remove {
+  padding: 8px 12px;
+  font-size: 22px;
 }
 
 .editor-actions {
@@ -637,8 +696,6 @@ body {
   color: var(--muted);
 }
 
-/* Unlike the host controls, these do not hide until hover -- a visitor who has
-   just landed has no reason to go hunting for them. */
 .demo-controls {
   display: flex;
   gap: 12px;

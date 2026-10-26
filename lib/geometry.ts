@@ -1,4 +1,4 @@
-/** SVG helpers for the six-wedge dial. Angles run clockwise from straight up. */
+/** SVG helpers for the circular dial. Angles run clockwise from straight up. */
 
 export interface Point {
   x: number;
@@ -7,7 +7,12 @@ export interface Point {
 
 export function polar(cx: number, cy: number, r: number, deg: number): Point {
   const rad = (deg * Math.PI) / 180;
-  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+  // Node and browsers can differ in their last trig decimal. Keep SVG
+  // coordinates stable across server rendering and hydration.
+  return {
+    x: Number((cx + r * Math.sin(rad)).toFixed(6)),
+    y: Number((cy - r * Math.cos(rad)).toFixed(6)),
+  };
 }
 
 /** Donut sector from startDeg to endDeg. The hole is where the dead zone lives. */

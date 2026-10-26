@@ -2,10 +2,10 @@ import { WEDGE_COUNT, headingToWedge } from './tilt.ts';
 import type { PhoneReading } from './dots.ts';
 
 /** jsonb comes back keyed by stringified wedge index. */
-export function talliesToCounts(tallies: Record<string, number> | null | undefined): number[] {
-  const counts = new Array<number>(WEDGE_COUNT).fill(0);
+export function talliesToCounts(tallies: Record<string, number> | null | undefined, optionCount = WEDGE_COUNT): number[] {
+  const counts = new Array<number>(optionCount).fill(0);
   if (!tallies) return counts;
-  for (let w = 0; w < WEDGE_COUNT; w++) counts[w] = Number(tallies[String(w)] ?? 0);
+  for (let w = 0; w < optionCount; w++) counts[w] = Number(tallies[String(w)] ?? 0);
   return counts;
 }
 
@@ -21,16 +21,16 @@ export function leaders(counts: number[]): number[] {
 }
 
 /**
- * Fold live phone positions into six counts. A phone lying flat is present but
+ * Fold live phone positions into the configured counts. A phone lying flat is present but
  * aiming at nothing, so it raises the room total without landing in a wedge --
  * abstaining has to be distinguishable from having left.
  */
-export function countsFrom(readings: PhoneReading[]): number[] {
-  const counts = new Array<number>(WEDGE_COUNT).fill(0);
+export function countsFrom(readings: PhoneReading[], optionCount = WEDGE_COUNT): number[] {
+  const counts = new Array<number>(optionCount).fill(0);
   for (const r of readings) {
     if (r.heading === null) continue;
-    const w = headingToWedge(r.heading);
-    if (w >= 0 && w < WEDGE_COUNT) counts[w]++;
+    const w = headingToWedge(r.heading, optionCount);
+    if (w >= 0 && w < optionCount) counts[w]++;
   }
   return counts;
 }
@@ -44,20 +44,20 @@ export const MAX_TALLY_COUNT = 10_000;
  * This is the only path where client-supplied data is stored, and it lands in a
  * jsonb column that is read straight back out onto the projector. Unchecked, a
  * malformed body puts NaN on the results screen and an unbounded one bloats the
- * row, so the shape is pinned here: six keys, finite non-negative integers.
+ * row, so the shape is pinned here: one key per option, finite non-negative integers.
  */
-export function parseTallies(input: unknown): Record<string, number> | null {
+export function parseTallies(input: unknown, optionCount = WEDGE_COUNT): Record<string, number> | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
 
   const entries = Object.entries(input as Record<string, unknown>);
-  if (entries.length > WEDGE_COUNT) return null;
+  if (entries.length > optionCount) return null;
 
   const out: Record<string, number> = {};
-  for (let w = 0; w < WEDGE_COUNT; w++) out[String(w)] = 0;
+  for (let w = 0; w < optionCount; w++) out[String(w)] = 0;
 
   for (const [key, value] of entries) {
     const w = Number(key);
-    if (!Number.isInteger(w) || w < 0 || w >= WEDGE_COUNT) return null;
+    if (!Number.isInteger(w) || w < 0 || w >= optionCount) return null;
     if (typeof value !== 'number' || !Number.isFinite(value)) return null;
     if (!Number.isInteger(value) || value < 0 || value > MAX_TALLY_COUNT) return null;
     out[String(w)] = value;

@@ -1,6 +1,6 @@
 import 'server-only';
 import { sessionRef } from './admin';
-import { SESSION_SLUG } from '../constants';
+import { SESSION_SLUG, validOptions } from '../constants';
 
 /**
  * The three host mutations, ported from the Postgres RPCs they replace.
@@ -36,11 +36,7 @@ export async function reset(): Promise<void> {
 }
 
 export async function setOptions(options: string[]): Promise<void> {
-  // The RPC refused anything but six labels. Keep that refusal here: the route
-  // validates too, but this is the last place before the write.
-  if (options.length !== 6) {
-    throw new Error('exactly six options required');
-  }
+  if (!validOptions(options)) throw new Error('Invalid options');
   await sessionRef(SESSION_SLUG).update({
     options,
     updated_at: now(),

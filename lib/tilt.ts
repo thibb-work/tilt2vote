@@ -1,5 +1,5 @@
 /**
- * Device orientation -> one of six wedges.
+ * Device orientation -> one of the configured wedges.
  *
  * Pure logic, no React and no browser APIs, so the boundary behaviour can be
  * tested without a phone. See RATIONALE below each constant for why it exists.
@@ -49,7 +49,7 @@ export interface Orientation {
 }
 
 export interface TiltReading {
-  /** 0..5, or null when the phone is flat (abstaining) */
+  /** 0..(option count - 1), or null when the phone is flat (abstaining) */
   wedge: number | null;
   /** how far the phone is tilted, degrees, clamped to 90 */
   magnitude: number;
@@ -63,18 +63,19 @@ export function angleDelta(a: number, b: number): number {
 }
 
 /** Wedge whose centre is nearest this heading, ignoring hysteresis. */
-export function headingToWedge(heading: number): number {
-  const shifted = (((heading + WEDGE_DEG / 2) % 360) + 360) % 360;
-  return Math.floor(shifted / WEDGE_DEG) % WEDGE_COUNT;
+export function headingToWedge(heading: number, optionCount = WEDGE_COUNT): number {
+  const wedgeDeg = 360 / optionCount;
+  const shifted = (((heading + wedgeDeg / 2) % 360) + 360) % 360;
+  return Math.floor(shifted / wedgeDeg) % optionCount;
 }
 
 /** Centre heading of a wedge, in degrees. Wedge 0 points straight away from you. */
-export function wedgeCentre(wedge: number): number {
-  return wedge * WEDGE_DEG;
+export function wedgeCentre(wedge: number, optionCount = WEDGE_COUNT): number {
+  return wedge * (360 / optionCount);
 }
 
 export interface TiltTracker {
-  update(o: Orientation): TiltReading;
+  update(o: Orientation, optionCount?: number): TiltReading;
   reset(): void;
 }
 
@@ -86,6 +87,7 @@ export function createTiltTracker(): TiltTracker {
   let sBeta: number | null = null;
   let sGamma: number | null = null;
   let wedge: number | null = null;
+  let previousCount = WEDGE_COUNT;
   // Signed, so a hand shaking about a fixed point averages back to nothing.
   let travelBeta = 0;
   let travelGamma = 0;
@@ -97,7 +99,11 @@ export function createTiltTracker(): TiltTracker {
       travelBeta = travelGamma = 0;
     },
 
-    update({ beta, gamma }: Orientation): TiltReading {
+    update({ beta, gamma }: Orientation, optionCount = WEDGE_COUNT): TiltReading {
+      if (optionCount !== previousCount) {
+        wedge = null;
+        previousCount = optionCount;
+      }
       if (beta == null || gamma == null) {
         return { wedge, magnitude: 0, heading: null };
       }
@@ -140,11 +146,11 @@ export function createTiltTracker(): TiltTracker {
       const heading = ((Math.atan2(sGamma, -sBeta) * 180) / Math.PI + 360) % 360;
 
       if (wedge === null) {
-        wedge = headingToWedge(heading);
+        wedge = headingToWedge(heading, optionCount);
       } else {
-        const drift = Math.abs(angleDelta(heading, wedgeCentre(wedge)));
-        if (drift > WEDGE_DEG / 2 + HYSTERESIS_DEG) {
-          wedge = headingToWedge(heading);
+        const drift = Math.abs(angleDelta(heading, wedgeCentre(wedge, optionCount)));
+        if (drift > 180 / optionCount + HYSTERESIS_DEG) {
+          wedge = headingToWedge(heading, optionCount);
         }
       }
 
